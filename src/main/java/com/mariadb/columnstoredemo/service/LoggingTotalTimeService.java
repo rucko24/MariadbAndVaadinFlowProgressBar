@@ -15,11 +15,12 @@ import java.time.LocalDateTime;
 @Service
 public class LoggingTotalTimeService {
 
-    public void loggingTotalTime(final int bathSize, final int bacthes, String totalTimeResult) {
-        try (var bufferedWriter = Files.newBufferedWriter(Path.of("src/main/resources/totaltime.txt"))) {
+    public void loggingTotalTime(final int batchSize, final int batches, String totalTimeResult) {
+        final var path = Path.of("src/main/resources/totaltime.txt");
+        try (var bufferedWriter = Files.newBufferedWriter(path)) {
             bufferedWriter.write("Total time=" + totalTimeResult);
-            bufferedWriter.write("\nBathSize=" + bathSize);
-            bufferedWriter.write("\nBathes=" + bacthes);
+            bufferedWriter.write("\nBatchSize=" + batchSize);
+            bufferedWriter.write("\nBatches=" + batches);
             bufferedWriter.write("\nFinished At=" + LocalDateTime.now());
         } catch (IOException ex) {
             ex.printStackTrace();

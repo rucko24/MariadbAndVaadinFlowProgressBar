@@ -1,4 +1,0 @@
-Total time=0min 0sec 266ms
-BathSize=10
-Bathes=1
-Finished At=2023-12-24T00:15:00.794061367

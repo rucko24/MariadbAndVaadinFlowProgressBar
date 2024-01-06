@@ -4,6 +4,7 @@ import com.mariadb.columnstoredemo.service.GeneratorService;
 import com.mariadb.columnstoredemo.service.LoggingTotalTimeService;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.component.UIDetachedException;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.html.H1;
@@ -16,6 +17,8 @@ import com.vaadin.flow.component.progressbar.ProgressBar;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.theme.lumo.LumoUtility;
+import com.vaadin.flow.theme.lumo.LumoUtility.JustifyContent;
 import com.vaadin.flow.theme.lumo.LumoUtility.Margin.Top;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.util.StopWatch;
@@ -36,6 +39,8 @@ public class GeneratorView extends VerticalLayout {
     private final Button clear = new Button("Clear", VaadinIcon.TRASH.create());
     private final GeneratorService service;
     private final LoggingTotalTimeService loggingTotalTimeService;
+    private Integer batchSizeValue;
+    private Integer batchesValue;
 
     public GeneratorView(GeneratorService service, LoggingTotalTimeService loggingTotalTimeService) {
         this.service = service;
@@ -50,9 +55,7 @@ public class GeneratorView extends VerticalLayout {
         flexLayout.setFlexDirection(FlexDirection.COLUMN);
 
         final FlexLayout flexButtons = new FlexLayout(start, clear);
-        flexButtons.setFlexDirection(FlexDirection.ROW);
-        flexButtons.addClassNames(Top.MEDIUM);
-        flexButtons.setJustifyContentMode(JustifyContentMode.BETWEEN);
+        flexButtons.addClassNames(LumoUtility.FlexDirection.ROW, Top.MEDIUM, JustifyContent.BETWEEN);
 
         final FlexLayout flexForProgressBar = new FlexLayout(progressBar);
 
@@ -73,14 +76,16 @@ public class GeneratorView extends VerticalLayout {
     }
 
     private void process(final UI ui) {
-        if (batchSize.getValue() != null && batches.getValue() != null) {
+        this.batchSizeValue = batchSize.getValue();
+        this.batchesValue = batches.getValue();
+        if (batchesValue != null && batchSizeValue != null) {
             progressBar.setVisible(true);
             start.setEnabled(false);
             final var stopWatch = new StopWatch();
             stopWatch.start();
-            Mono.fromRunnable(() -> service.generate(batchSize.getValue(), batches.getValue()))
+            Mono.fromRunnable(() -> service.generate(batchSizeValue, batchesValue))
                     .subscribeOn(Schedulers.boundedElastic())
-                    .doOnError(onError -> log.error("Error {}", onError))
+                    .doOnError(onError -> this.onError(ui, stopWatch))
                     .doOnTerminate(() -> this.onTerminated(ui, stopWatch))
                     .subscribe();
         } else {
@@ -89,26 +94,37 @@ public class GeneratorView extends VerticalLayout {
     }
 
     private void onTerminated(final UI ui, StopWatch stopWatch) {
-        ui.access(() -> {
+        try {
+            ui.access(() -> this.loggingTotalTime(stopWatch, false));
+        } catch (UIDetachedException ex) {
+            this.loggingTotalTime(stopWatch, true);
+        }
+    }
+
+    private void onError(final UI ui, StopWatch stopWatch) {
+        log.error("Error {}");
+        try {
+            ui.access(() -> this.loggingTotalTime(stopWatch, false));
+        } catch (UIDetachedException ex) {
+            this.loggingTotalTime(stopWatch, true);
+        }
+    }
+
+    private void loggingTotalTime(StopWatch stopWatch, boolean detachedUI) {
+        if (!detachedUI) {
             progressBar.setVisible(false);
             start.setEnabled(true);
             Notification.show("Data generated.");
-            stopWatch.stop();
-            var ms = Math.round(stopWatch.getTotalTimeMillis());
-            var sec = Math.round(stopWatch.getTotalTimeSeconds());
-            var min = Math.round(stopWatch.getTotalTime(TimeUnit.MINUTES));
-            log.info("Total time {}min {}sec {}ms", min, sec, ms);
-            var totalTime = min + "min " + sec + "sec " + ms + "ms";
-            this.loggingTotalTime(totalTime);
-        });
-    }
+        }
+        stopWatch.stop();
+        var ms = Math.round(stopWatch.getTotalTimeMillis());
+        var sec = Math.round(stopWatch.getTotalTimeSeconds());
+        var min = Math.round(stopWatch.getTotalTime(TimeUnit.MINUTES));
+        log.info("Total time {}min {}sec {}ms", min, sec, ms);
+        var totalTime = min + "min " + sec + "sec " + ms + "ms";
 
-    private void loggingTotalTime(String totalTimeResult) {
-        var bathSize = batchSize.getValue();
-        var bacthes = batches.getValue();
-        this.loggingTotalTimeService.loggingTotalTime(bathSize, bacthes, totalTimeResult);
+        this.loggingTotalTimeService.loggingTotalTime(batchSizeValue, batchesValue, totalTime);
     }
-
 
     @Override
     protected void onAttach(AttachEvent attachEvent) {
